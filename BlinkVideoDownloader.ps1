@@ -120,18 +120,23 @@ while ( 1 )
     #$uri = 'https://rest-'+ $region +'.immedia-semi.com/api/v2/videos/changed?since=2016-01-01T23:11:21+0000&page=' + $pageNum
 
     # Changed endpoint again
-    $uri = 'https://rest-'+ $region +'.immedia-semi.com/api/v1/accounts/'+ $accountID +'/media/changed?since=2015-04-19T23:11:20+0000&page=' + $pageNum
+    $uri = 'https://rest-'+ $region +'.immedia-semi.com/api/v1/accounts/'+ $accountID +'/media/changed?since=2020-01-01T00:00:00+0000&page=' + $pageNum
+
+    Write-Output $uri
 
     # Get the list of video clip information from each page from Blink
     $response = Invoke-RestMethod -UseBasicParsing $uri -Method Get -Headers $headers
     
     # No more videos to download, exit from loop
     if(-not $response.media){
+        Write-Debug("No media to download.")
         break
     }
 
     # Go through each video information and get the download link and relevant information
     foreach($video in $response.media){
+        Write-Debug ("Should download " + $video.media + " for $camera camera in $network?")
+
         # Video clip information
         $address = $video.media
         $timestamp = $video.created_at
@@ -143,6 +148,8 @@ while ( 1 )
             continue
         }
        
+        Write-Debug ("Downloading " + $video.media + " for $camera camera in $network.")
+
         # Get video timestamp in local time
         $videoTime = Get-Date -Date $timestamp -Format "yyyy-MM-dd_HH-mm-ss"
 
@@ -157,17 +164,23 @@ while ( 1 )
                 Invoke-RestMethod -UseBasicParsing $videoURL -Method Get -Headers $headers -OutFile $videoPath 
                 $httpCode = $_.Exception.Response.StatusCode.value__        
                 if($httpCode -ne 404){
-                    echo "Downloading video for $camera camera in $network."
-                }   
+                    Write-Debug ("Downloading {0} for {1} camera in {2} to {3}." -f $video.media,$camera,$network,$videoPath)
+                } else{
+                    Write-Output ("Video not found")
+                }
             } catch { 
-                # Left empty to prevent spam when video file no longer exists
-                echo $httpCode
+                $msg = "Error while downloading {0} for {1} camera in {2} to {3}." -f $video.media,$camera,$network,$videoPath
+                $httpCode = "{0}" -f $httpCode
+                $exMsg = "{0}" -f $_.Exception.Message
+                Write-Output ($httpCode + $exMsg + $msg)
             }
         }
+
+        Write-Debug ("Downloaded " + $video.media +" for $camera camera in $network to $videoPath.")
     }
     $pageNum += 1
 }
-echo "All new videos and thumbnails downloaded to $saveDirectory\Blink\"
+Write-Output ("All new videos and thumbnails downloaded to $saveDirectory\Blink\")
 
 # Remove "pause" command below for automation through Windows Scheduler
 pause
